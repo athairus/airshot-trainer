@@ -19,9 +19,9 @@ public Plugin:myinfo = {
 };
 
 new g_GlowSprite;
-new g_iToolsVelocity;
 new Handle:g_hGravity;
 new bool:ticktock;
+new Float:targetLocPrev[ 32 ][ 3 ];
 
 public OnMapStart() {
     g_GlowSprite = PrecacheModel( "sprites/healbeam_blue.vmt" );
@@ -38,7 +38,7 @@ public OnGameFrame() {
                     
                     // calculate airshot location, send to player
                     new Float:glowSpriteLocation[ 3 ];
-                    PredictTarget( player, target, glowSpriteLocation, 3 );
+                    PredictTarget( player, target, glowSpriteLocation, 5 );
                     TE_SetupGlowSprite( glowSpriteLocation, g_GlowSprite, 0.1, 0.4, 255 );
                     TE_SendToClient( player );                    
                         
@@ -57,11 +57,6 @@ public OnPluginStart() {
 
     if( !StrEqual( sGameType, "tf", true ) ) 
         SetFailState( "This plugin is for TF2 only." );
-    
-    // LoadTranslations( "common.phrases.txt" );
-
-
-    g_iToolsVelocity = FindSendPropInfo( "CBasePlayer", "m_vecVelocity[0]" );
 
     g_hGravity = FindConVar( "sv_gravity" );
     if( g_hGravity == INVALID_HANDLE ) {
@@ -81,133 +76,9 @@ stock bool:IsValidClient( iClient ) {
     return IsClientInGame( iClient );
 }
 
-
-PredictAirshotLocation( player, target, Float:out[ 3 ] ) {
-    new Float:playerLoc[ 3 ];
-    new Float:playerVel[ 3 ];
-
-    new Float:targetLoc[ 3 ];
-    new Float:targetVel[ 3 ];
-
-    new Float:projectileVel = 1100.0;   // hard-coded to rocket launcher (1100) for now
-    new Float:g = -800.0;               // hard-coded to default tf2 gravity (800) for now
-
-    GetClientAbsOrigin( player, playerLoc );
-    for ( new x = 0; x < 3; x++ ) playerVel[ x ] = GetEntDataFloat( player, g_iToolsVelocity + ( x * 4 ) );
-
-    GetClientAbsOrigin( target, targetLoc );
-    for ( new x = 0; x < 3; x++ ) targetVel[ x ] = GetEntDataFloat( target, g_iToolsVelocity + ( x * 4 ) );
-
-    // determine player's weapon, set projectileVel accordingly
-    projectileVel = GetProjectileVelocity( player );
-
-    // find traveltime by rocket from player to target
-    new Float:distance;
-    distance = GetVectorDistance( playerLoc, targetLoc );
-    distance = FloatAbs( distance );
-
-    new Float:time;
-    if( projectileVel != 0 ) {
-        time = distance / projectileVel;
-    }
-    else time = 0.0;
-
-    new Float:distanceToGround = GetClientDistanceToGround( target );
-    new Float:minDistance = 20.0;
-
-    // extrapolate along target's trajectory to determine final point
-    out[ 0 ] = targetLoc[ 0 ] + targetVel[ 0 ] * time;
-    out[ 1 ] = targetLoc[ 1 ] + targetVel[ 1 ] * time;
-    new Float:gfactor = 0.5 * g * time * time;
-    //if( distanceToGround < minDistance ) gfactor = 0.0;
-    out[ 2 ] = targetLoc[ 2 ] + targetVel[ 2 ] * time + gfactor;
-
-    // do a second pass
-    distance = GetVectorDistance( playerLoc, out );
-    distance = FloatAbs( distance );
-    if( projectileVel != 0 ) time = distance / projectileVel;
-    else time = 0.0;
-    out[ 0 ] = targetLoc[ 0 ] + targetVel[ 0 ] * time;
-    out[ 1 ] = targetLoc[ 1 ] + targetVel[ 1 ] * time;
-    gfactor = 0.5 * g * time * time;
-    //if( distanceToGround < minDistance ) gfactor = 0.0;
-    out[ 2 ] = targetLoc[ 2 ] + targetVel[ 2 ] * time + gfactor;
-
-    // do a third pass
-    distance = GetVectorDistance( playerLoc, out );
-    distance = FloatAbs( distance );
-    if( projectileVel != 0 ) time = distance / projectileVel;
-    else time = 0.0;
-    //time += GetClientAvgLatency( player, NetFlow_Both ); // compensate for latency
-    out[ 0 ] = targetLoc[ 0 ] + targetVel[ 0 ] * time;
-    out[ 1 ] = targetLoc[ 1 ] + targetVel[ 1 ] * time;
-    gfactor = 0.5 * g * time * time;
-    //if( distanceToGround < minDistance ) gfactor = 0.0;
-    out[ 2 ] = targetLoc[ 2 ] + targetVel[ 2 ] * time + gfactor;
-
-    // do a fourth pass
-    distance = GetVectorDistance( playerLoc, out );
-    distance = FloatAbs( distance );
-    if( projectileVel != 0 ) time = distance / projectileVel;
-    else time = 0.0;
-    time += GetClientAvgLatency( player, NetFlow_Both ); // compensate for latency
-    out[ 0 ] = targetLoc[ 0 ] + targetVel[ 0 ] * time;
-    out[ 1 ] = targetLoc[ 1 ] + targetVel[ 1 ] * time;
-    gfactor = 0.5 * g * time * time;
-    //if( distanceToGround < minDistance ) gfactor = 0.0;
-    out[ 2 ] = targetLoc[ 2 ] + targetVel[ 2 ] * time + gfactor;
-
-    /*
-    // do a fifth pass... overkill?
-    distance = GetVectorDistance( playerLoc, out );
-    distance = FloatAbs( distance );
-    if( projectileVel != 0 ) time = distance / projectileVel;
-    else time = 0.0;
-    time += GetClientAvgLatency( player, NetFlow_Both ); // compensate for latency
-    out[ 0 ] = targetLoc[ 0 ] + targetVel[ 0 ] * time;
-    out[ 1 ] = targetLoc[ 1 ] + targetVel[ 1 ] * time;
-    gfactor = 0.5 * g * time * time;
-    if( distanceToGround < minDistance ) gfactor = 0.0;
-    out[ 2 ] = targetLoc[ 2 ] + targetVel[ 2 ] * time + gfactor;
-    */
-
-    
-    
-    // check if this target is below the ground
-
-    new Float:fGround[ 3 ] = { 0.0, 0.0, -100000.0 };
-    out[ 2 ] += 10; 
-    TR_TraceRayFilter( out, Float:{ 90.0, 0.0, 0.0 }, MASK_PLAYERSOLID, RayType_Infinite, allowAll );
-    out[ 2 ] -= 10; 
-    if( !TR_DidHit() ) { // below ground or something else
-        //TR_GetEndPosition( fGround );
-
-        // move z value to target level
-        out[ 2 ] = targetLoc[ 2 ]; 
-
-        // repeat process
-        out[ 2 ] += 10; 
-        TR_TraceRayFilter( out, Float:{ 90.0, 0.0, 0.0 }, MASK_PLAYERSOLID, RayType_Infinite, allowAll );
-        out[ 2 ] -= 10; 
-        if( TR_DidHit() ) { // if that worked...
-            TR_GetEndPosition( fGround );
-            out[ 2 ] = fGround[ 2 ];
-        }
-    }
-    //new Float:gDistance = GetGround( out, fGround );
-    //if( out[ 2 ] < fGround[ 2 ] ) out[ 2 ] = fGround[ 2 ];
-
-    //PrintToConsole( player, "out:{ %f, %f, %f } \n\tground:{ %f, %f, %f } ", out[ 0 ], out[ 1 ], out[ 2 ], fGround[ 0 ], fGround[ 1 ], fGround[ 2 ] );
-
-    // raise target to chest level, most tf2 class models are 100 HU tall
-    out[ 2 ] += 50; 
-
-}
-
 PredictTarget( player, target, Float:out[ 3 ], passes ) {
 
     new Float:playerLoc[ 3 ];
-    new Float:playerVel[ 3 ];
 
     new Float:targetLoc[ 3 ];
     new Float:targetVel[ 3 ];
@@ -220,20 +91,19 @@ PredictTarget( player, target, Float:out[ 3 ], passes ) {
 
     // get player's location and velocity
     GetClientAbsOrigin( player, playerLoc );
-    for( new x = 0; x < 3; x++ ) playerVel[ x ] = GetEntDataFloat( player, g_iToolsVelocity + ( x * 4 ) );
 
     // get target's location and velocity
     GetClientAbsOrigin( target, targetLoc );
-    for( new x = 0; x < 3; x++ ) targetVel[ x ] = GetEntDataFloat( target, g_iToolsVelocity + ( x * 4 ) );
-
-    if( ticktock ) {
-        //targetVel[ 0 ] = -1 * targetVel[ 0 ];
-        //targetVel[ 1 ] = -1 * targetVel[ 1 ];
-    }
+    GetVelocity( targetVel, targetLoc, targetLocPrev[ target ], GetTickInterval() );
+    for( new x = 0; x < 3; x++ ) targetLocPrev[ target ][ x ] = targetLoc[ x ];
 
     new Float:distance;
     new Float:time;
     new Float:gfactor;
+
+    new Float:distanceToGround = GetClientDistanceToGround( target );
+    new Float:minDistance = 20.0;
+
 
     // calculate the ideal location using n passes
     for( new i = 0; i < passes; i++ ) {
@@ -245,16 +115,14 @@ PredictTarget( player, target, Float:out[ 3 ], passes ) {
         else time = 0.0; // hitscan or melee weapon, no travel time
 
         // compensate for latency
-        if( i == passes - 1 ) time += GetClientAvgLatency( player, NetFlow_Both ); 
+        if( i == passes - 1 ) time += GetClientAvgLatency( player, NetFlow_Both ) / 2; 
 
         // extrapolate along the trajectory (time) seconds ahead
         out[ 0 ] = targetLoc[ 0 ] + targetVel[ 0 ] * time;
         out[ 1 ] = targetLoc[ 1 ] + targetVel[ 1 ] * time;
         gfactor = 0.5 * g * time * time;
+        if( distanceToGround < minDistance ) gfactor = 0.0;
         out[ 2 ] = targetLoc[ 2 ] + targetVel[ 2 ] * time + gfactor;
-
-        //if( i == 0 ) PrintToConsole( player, "pass 0: distance:%f\ntime:%f\n", distance, time );
-        //if( i == passes - 1 ) PrintToConsole( player, "final pass: distance:%f\ntime:%f\n", distance, time );
 
     }
 
@@ -263,15 +131,69 @@ PredictTarget( player, target, Float:out[ 3 ], passes ) {
 
 }
 
+GetVelocity( Float:out[ 3 ], Float:current[ 3 ], Float:previous[ 3 ], Float:delta ) {
+    for( new x = 0; x < 3; x++ ) out[ x ] = ( current[ x ] - previous[ x ] ) / delta;
+}
+
 
 Float:GetProjectileVelocity( player ) {
     new Float:pv = 0.0; // if not changed, current weapon is a hitscan/melee weapon
 
     new weapon = GetEntPropEnt( player, Prop_Send, "m_hActiveWeapon" );
 
+
+    // http://wiki.teamfortress.com/wiki/Projectiles
+    // http://wiki.alliedmods.net/Team_Fortress_2_Item_Definition_Indexes
+
     switch( GetEntProp( weapon, Prop_Send, "m_iItemDefinitionIndex" ) ) {
         case 56: // huntsman
             pv = 2600.0;
+        case 305: // crusader's crossbow
+            pv = 2400.0;
+
+        case 44:  // sandman
+            pv = 3000.0;
+        case 648: // the wrap assassin
+            pv = 3000.0;
+
+        case 812: // flying guillotine
+            pv = 3000.0;
+        case 833: // flying guillotine (genuine)
+            pv = 3000.0;
+
+        case 441: // cow mangler 5000
+            pv = 1100.0;
+
+        case 442: // righteous bison
+            pv = 1200.0;
+        case 588: // pomson 6000
+            pv = 1200.0;
+
+        case 39: // flare gun 
+            pv = 2000.0;
+        case 740: // scorch shot 
+            pv = 2000.0;
+        case 351: // detonator
+            pv = 2000.0;
+
+        case 595: // manmelter
+            pv = 3000.0;
+
+        case 19:  // grenade laucher
+            pv = 1220.0;
+        case 206: // renamed gl
+            pv = 1220.0;
+
+        case 308: // loch-n-load
+            pv = 1525.0;
+
+        case 996: // loose cannon
+            pv = 1811.0;
+
+        case 58: // jarate
+            pv = 935.0;
+        case 222: // mad milk
+            pv = 935.0;
 
         case 18:  // rocket launcher
             pv = 1100.0;
@@ -292,10 +214,32 @@ Float:GetProjectileVelocity( player ) {
         case 414: // liberty launcher
             pv = 1540.0;
 
-        case 19:  // grenade laucher
-            pv = 1220.0;
-        case 206: // renamed gl
-            pv = 1220.0;
+        case 581: // MONOCULUS
+            pv = 1100.0;
+
+        case 140: // wrangler (level 3 rockets)
+            pv = 1100.0;
+
+        case 20: // stickybomb launcher
+            pv = 2410.0;
+        case 207: // stickybomb launcher (renamed/strange)
+            pv = 2410.0;
+        case 130: // scottish resistance
+            pv = 2410.0
+        case 265: // sticky jumper
+            pv = 2410.0
+
+        case 17: // syringe gun
+            pv = 1000.0;
+        case 204: // syringe gun (renamed/strange)
+            pv = 1000.0;
+        case 36: // blutsauger
+            pv = 1000.0;
+        case 412: // overdose
+            pv = 1000.0;
+
+        case 997: // rescue ranger
+            pv = 2400.0;
 
     }
 
@@ -349,6 +293,8 @@ TODO:
 - draw a vertical line to help with proper horizontal aiming
 - dual sided crosshairs for (unpredictable) horizontal movement
 - draw an arc, place crosshairs along arc (good for air straifing)
+- improve sticky launcher prediction, constantly check charge level and return appropiate velocity for that
+- give more accurate results for projectile weapons that arc
 
 
 */
