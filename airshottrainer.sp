@@ -19,13 +19,66 @@ public Plugin:myinfo = {
 };
 
 new g_GlowSprite;
+new g_iToolsVelocity;
 new Handle:g_hGravity;
 new bool:ticktock;
 new Float:targetLocPrev[ 32 ][ 3 ];
+new crosshairEntity[ 32 ];
+new crosshairSpriteEntity[ 32 ];
 
 public OnMapStart() {
     g_GlowSprite = PrecacheModel( "sprites/healbeam_blue.vmt" );
     //g_GlowSprite = PrecacheModel( "sprites/light_glow03.vmt" );
+    Event_RoundStart( INVALID_HANDLE, "asdf", true );
+
+}
+public Event_RoundStart( Handle:hEvent, const String:szEventName[], bool:bDontBroadcast ) {
+    // create prop_physics entities
+    for( new target = 0; target < 32; target++ ) {
+
+        new Float:foo = -16.0 + target * 8;
+        new Float:origin[ 3 ];
+        origin[ 0 ] = foo;
+
+        new String:crosshairName[ 64 ];
+        Format( crosshairName, sizeof( crosshairName), "crosshair_%d", target );
+
+        crosshairEntity[ target ] = CreateEntityByName( "prop_physics" );
+        DispatchKeyValue( crosshairEntity[ target ], "targetname", crosshairName );
+        SetEntityMoveType( crosshairEntity[ target ], MOVETYPE_NOCLIP ); 
+        TeleportEntity( crosshairEntity[ target ], NULL_VECTOR, NULL_VECTOR, NULL_VECTOR );
+        //PrintToServer( "PHYSICS target = %d, name = %s, entityid = %d\n", target, crosshairName, crosshairEntity[ target ] );
+    }
+    
+
+    
+    // create env_sprite entities
+    for( new target = 0; target < 32; target++ ) {
+
+        new String:crosshairName[ 64 ];
+        Format( crosshairName, sizeof( crosshairName), "crosshair_%d", target );
+
+        decl String:spriteName[ 64 ];
+        Format( spriteName, sizeof( spriteName ), "sprite_%d", target );
+        
+
+        crosshairSpriteEntity[ target ] = CreateEntityByName( "env_sprite" );
+        DispatchKeyValueVector( crosshairSpriteEntity[ target ], "origin", NULL_VECTOR );
+        DispatchKeyValue( crosshairSpriteEntity[ target ], "targetname", spriteName );
+        DispatchKeyValue( crosshairSpriteEntity[ target ], "spawnflags", "0" );
+        DispatchKeyValue( crosshairSpriteEntity[ target ], "scale", "3" );
+        DispatchKeyValue( crosshairSpriteEntity[ target ], "rendermode", "5" );
+        DispatchKeyValue( crosshairSpriteEntity[ target ], "rendercolor", "0 255 0" );
+        DispatchKeyValue( crosshairSpriteEntity[ target ], "renderamt", "255" );
+        DispatchKeyValue( crosshairSpriteEntity[ target ], "model", "vgui/crosshairs/crosshairX.vmt" );
+        DispatchSpawn( crosshairSpriteEntity[ target ] );
+        AcceptEntityInput( crosshairSpriteEntity[ target ], "ShowSprite" );
+        //PrintToServer( "SPRITE target = %d, name = %s, entityid = %d\n", target, spriteName, crosshairSpriteEntity[ target ] );
+
+        DispatchKeyValue( crosshairSpriteEntity[ target ], "parentname", crosshairName );
+        SetVariantString( crosshairName );
+        AcceptEntityInput( crosshairSpriteEntity[ target ], "SetParent" ); 
+    }
 }
  
 public OnGameFrame() {
@@ -37,10 +90,10 @@ public OnGameFrame() {
                 if( ConnectedAliveNotSpec( target ) && ( player != target ) ) {     
                     
                     // calculate airshot location, send to player
-                    new Float:glowSpriteLocation[ 3 ];
-                    PredictTarget( player, target, glowSpriteLocation, 5 );
-                    TE_SetupGlowSprite( glowSpriteLocation, g_GlowSprite, 0.1, 0.4, 255 );
-                    TE_SendToClient( player );                    
+                    new Float:crosshairLoc[ 3 ];
+                    PredictTarget( player, target, crosshairLoc, 5 );
+                    TE_SetupGlowSprite( crosshairLoc, g_GlowSprite, 0.1, 0.4, 255 );
+                    TE_SendToClient( player );                 
                         
                 }
             }
@@ -58,12 +111,26 @@ public OnPluginStart() {
     if( !StrEqual( sGameType, "tf", true ) ) 
         SetFailState( "This plugin is for TF2 only." );
 
+    g_iToolsVelocity = FindSendPropInfo( "CBasePlayer", "m_vecVelocity[0]" );
+
     g_hGravity = FindConVar( "sv_gravity" );
     if( g_hGravity == INVALID_HANDLE ) {
         SetFailState( "Unable to find convar: sv_gravity" );
     }
     ticktock = true;
 
+    //HookEvent( "round_start", Event_RoundStart );  
+    HookEventEx( "teamplay_round_start", Event_RoundStart, EventHookMode_PostNoCopy );
+
+}
+
+public OnPluginEnd() {
+    for( new target = 0; target < 32; target++ ) {
+        AcceptEntityInput( crosshairEntity[ target ], "Deactivate" );
+        AcceptEntityInput( crosshairEntity[ target ], "Kill" );
+        AcceptEntityInput( crosshairSpriteEntity[ target ], "Deactivate" );
+        AcceptEntityInput( crosshairSpriteEntity[ target ], "Kill" );
+    }
 }
 
 ConnectedAliveNotSpec( player ) {
@@ -89,13 +156,19 @@ PredictTarget( player, target, Float:out[ 3 ], passes ) {
     // get gravity
     new g = GetConVarInt( g_hGravity ) * -1;
 
-    // get player's location and velocity
+    // get player's location
     GetClientAbsOrigin( player, playerLoc );
 
     // get target's location and velocity
     GetClientAbsOrigin( target, targetLoc );
-    GetVelocity( targetVel, targetLoc, targetLocPrev[ target ], GetTickInterval() );
-    for( new x = 0; x < 3; x++ ) targetLocPrev[ target ][ x ] = targetLoc[ x ];
+
+    // some bots (like the ones on tr_walkway) don't return proper velocity data, so calculate their velocity manually 
+    if( IsFakeClient( target ) ) {
+        GetVelocity( targetVel, targetLoc, targetLocPrev[ target ], GetTickInterval() ); 
+        for( new x = 0; x < 3; x++ ) targetLocPrev[ target ][ x ] = targetLoc[ x ];
+    }
+    else for ( new x = 0; x < 3; x++ ) targetVel[ x ] = GetEntDataFloat( target, g_iToolsVelocity + ( x * 4 ) );
+    
 
     new Float:distance;
     new Float:time;
@@ -114,14 +187,20 @@ PredictTarget( player, target, Float:out[ 3 ], passes ) {
         if( projectileVel != 0.0 ) time = distance / projectileVel;
         else time = 0.0; // hitscan or melee weapon, no travel time
 
-        // compensate for latency
-        if( i == passes - 1 ) time += GetClientAvgLatency( player, NetFlow_Both ) / 2; 
+        // compensate for weapon warmup and latency on final pass
+        if( i == passes - 1 ) {
+            time += GetWarmup( player );
+            time += GetClientAvgLatency( player, NetFlow_Both ) / 2;             
+        }
 
         // extrapolate along the trajectory (time) seconds ahead
         out[ 0 ] = targetLoc[ 0 ] + targetVel[ 0 ] * time;
         out[ 1 ] = targetLoc[ 1 ] + targetVel[ 1 ] * time;
+
+        // determine if gravity should be accounted for or not
         gfactor = 0.5 * g * time * time;
         if( distanceToGround < minDistance ) gfactor = 0.0;
+
         out[ 2 ] = targetLoc[ 2 ] + targetVel[ 2 ] * time + gfactor;
 
     }
@@ -129,10 +208,32 @@ PredictTarget( player, target, Float:out[ 3 ], passes ) {
     // raise target to chest level, most tf2 class models are 100 HU tall
     out[ 2 ] += 50; 
 
+    //if( player != target && ticktock ) TeleportEntity( crosshairEntity[ target ], out, NULL_VECTOR, targetVel );
+    //if( ConnectedAliveNotSpec( target ) && ConnectedAliveNotSpec( player ) ) AcceptEntityInput( crosshairSpriteEntity[ target ], "ShowSprite" );
+    //else AcceptEntityInput( crosshairSpriteEntity[ target ], "HideSprite" );
+
 }
 
 GetVelocity( Float:out[ 3 ], Float:current[ 3 ], Float:previous[ 3 ], Float:delta ) {
     for( new x = 0; x < 3; x++ ) out[ x ] = ( current[ x ] - previous[ x ] ) / delta;
+}
+
+Float:GetWarmup( player ) {
+    new weapon = GetEntPropEnt( player, Prop_Send, "m_hActiveWeapon" );
+
+    switch( GetEntProp( weapon, Prop_Send, "m_iItemDefinitionIndex" ) ) {
+
+        case 44:  // sandman
+            return 0.25;
+        case 648: // the wrap assassin
+            return 0.25;
+
+        case 812: // flying guillotine
+            return 0.25;
+        case 833: // flying guillotine (genuine)
+            return 0.25;
+    }
+    return 0.0;
 }
 
 
@@ -295,6 +396,7 @@ TODO:
 - draw an arc, place crosshairs along arc (good for air straifing)
 - improve sticky launcher prediction, constantly check charge level and return appropiate velocity for that
 - give more accurate results for projectile weapons that arc
+- the more an enemy dances around, the fuzzier the target should be
 
 
 */
