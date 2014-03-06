@@ -1,4 +1,4 @@
-// airshot trainer by whiplash
+// airshot trainer by athairus
 
 #include <sourcemod>
 #include <sdktools>
@@ -11,10 +11,10 @@
 public Plugin:myinfo = {
 
     name = "Airshot Trainer",
-    author = "whiplash",
+    author = "athairus",
     description = "A plugin designed to assist in tf2 airshot and other projectile weapon training",
     version = "0.1 alpha",
-    url = "http://o0whiplash0o.net/projects/tf2/airshottrainer"
+    url = "http://athair.us/"
 
 };
 
