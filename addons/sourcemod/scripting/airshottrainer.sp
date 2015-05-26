@@ -4,7 +4,7 @@
 #include <sdktools>
 #include <tf2>
 #include <tf2_stocks>
-
+#include <sdkhooks>
 #include <smlib>
 
 
@@ -25,6 +25,8 @@ new bool:ticktock;
 new Float:targetLocPrev[ 32 ][ 3 ];
 new crosshairEntity[ 32 ];
 new crosshairSpriteEntity[ 32 ];
+new shotsfired = 1;
+new numhits=0;
 
 public OnMapStart() {
     g_GlowSprite = PrecacheModel( "sprites/healbeam_blue.vmt" );
@@ -80,6 +82,11 @@ public Event_RoundStart( Handle:hEvent, const String:szEventName[], bool:bDontBr
         AcceptEntityInput( crosshairSpriteEntity[ target ], "SetParent" ); 
     }
 }
+
+public OnClientPutInServer( client ) {
+    SDKHook( client, SDKHook_OnTakeDamage, OnTakeDamage );
+    //SDKHook( client, SDKHook_OnPlayerRunCmd, OnPlayerRunCmd );
+}
  
 public OnGameFrame() {
     for( new player = 1; player <= MaxClients; player++ ) {     
@@ -97,6 +104,8 @@ public OnGameFrame() {
                         
                 }
             }
+
+            PrintToServer( "Ratio: %f, numhits=%d shotsfired=%d", ( numhits / shotsfired ), numhits, shotsfired );
         }
     }    
     if( ticktock ) ticktock = false;
@@ -132,6 +141,21 @@ public OnPluginEnd() {
         AcceptEntityInput( crosshairSpriteEntity[ target ], "Kill" );
     }
 }
+
+public Action:OnPlayerRunCmd( client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon ) {
+    if( ( buttons & IN_ATTACK ) == IN_ATTACK ) {
+        shotsfired++;
+    }
+    return Plugin_Continue;
+}
+
+public Action:OnTakeDamage( victim, &attacker, &inflictor, &Float:damage, &damagetype ) {
+    if( ConnectedAliveNotSpec( victim ) && ( IsFakeClient( victim ) ) ) {
+        numhits++;
+    }
+    return Plugin_Continue;
+}
+
 
 ConnectedAliveNotSpec( player ) {
     return ( IsValidClient( player ) && IsPlayerAlive( player ) && GetClientTeam( player ) > 1 );
