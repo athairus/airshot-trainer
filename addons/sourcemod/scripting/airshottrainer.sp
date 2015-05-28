@@ -1,4 +1,4 @@
-// airshot trainer by athairus
+// Airshot trainer by athairus
 
 #include <sourcemod>
 #include <sdktools>
@@ -26,7 +26,7 @@ new Float:targetLocPrev[ 32 ][ 3 ];
 new crosshairEntity[ 32 ];
 new crosshairSpriteEntity[ 32 ];
 new shotsfired = 1;
-new numhits=0;
+new numhits = 0;
 
 public OnMapStart() {
     g_GlowSprite = PrecacheModel( "sprites/healbeam_blue.vmt" );
@@ -35,7 +35,7 @@ public OnMapStart() {
 
 }
 public Event_RoundStart( Handle:hEvent, const String:szEventName[], bool:bDontBroadcast ) {
-    // create prop_physics entities
+    // Create prop_physics entities
     for( new target = 0; target < 32; target++ ) {
 
         new Float:foo = -16.0 + target * 8;
@@ -54,7 +54,7 @@ public Event_RoundStart( Handle:hEvent, const String:szEventName[], bool:bDontBr
     
 
     
-    // create env_sprite entities
+    // Create env_sprite entities
     for( new target = 0; target < 32; target++ ) {
 
         new String:crosshairName[ 64 ];
@@ -63,16 +63,15 @@ public Event_RoundStart( Handle:hEvent, const String:szEventName[], bool:bDontBr
         decl String:spriteName[ 64 ];
         Format( spriteName, sizeof( spriteName ), "sprite_%d", target );
         
-
         crosshairSpriteEntity[ target ] = CreateEntityByName( "env_sprite" );
         DispatchKeyValueVector( crosshairSpriteEntity[ target ], "origin", NULL_VECTOR );
         DispatchKeyValue( crosshairSpriteEntity[ target ], "targetname", spriteName );
         DispatchKeyValue( crosshairSpriteEntity[ target ], "spawnflags", "0" );
-        DispatchKeyValue( crosshairSpriteEntity[ target ], "scale", "3" );
+        DispatchKeyValue( crosshairSpriteEntity[ target ], "scale", "2" );
         DispatchKeyValue( crosshairSpriteEntity[ target ], "rendermode", "5" );
         DispatchKeyValue( crosshairSpriteEntity[ target ], "rendercolor", "0 255 0" );
         DispatchKeyValue( crosshairSpriteEntity[ target ], "renderamt", "255" );
-        DispatchKeyValue( crosshairSpriteEntity[ target ], "model", "vgui/crosshairs/crosshairX.vmt" );
+        DispatchKeyValue( crosshairSpriteEntity[ target ], "model", "vgui/crosshairs/crosshair2.vmt" );
         DispatchSpawn( crosshairSpriteEntity[ target ] );
         AcceptEntityInput( crosshairSpriteEntity[ target ], "ShowSprite" );
         //PrintToServer( "SPRITE target = %d, name = %s, entityid = %d\n", target, spriteName, crosshairSpriteEntity[ target ] );
@@ -99,13 +98,24 @@ public OnGameFrame() {
                     // calculate airshot location, send to player
                     new Float:crosshairLoc[ 3 ];
                     PredictTarget( player, target, crosshairLoc, 5 );
-                    TE_SetupGlowSprite( crosshairLoc, g_GlowSprite, 0.1, 0.4, 255 );
-                    TE_SendToClient( player );                 
+                    // TE_SetupGlowSprite( crosshairLoc, g_GlowSprite, 0.1, 0.4, 255 );
+                    // TE_SendToClient( player );                 
+
+                    new Float:targetLoc[ 3 ];
+                    new Float:targetVel[ 3 ];
+
+                    // get target's location and velocity
+                    GetClientAbsOrigin( target, targetLoc );
+
+                    // some bots (like the ones on tr_walkway) don't return proper velocity data, so calculate their velocity manually 
+                    GetVelocity( targetVel, targetLoc, targetLocPrev[ target ], GetTickInterval() ); 
+                    for( new x = 0; x < 3; x++ ) targetLocPrev[ target ][ x ] = targetLoc[ x ];
+                    TeleportEntity( crosshairEntity[ target ], crosshairLoc, NULL_VECTOR, targetVel );
                         
                 }
             }
 
-            PrintToServer( "Ratio: %f, numhits=%d shotsfired=%d", ( numhits / shotsfired ), numhits, shotsfired );
+            // PrintToServer( "Ratio: %f, numhits=%d shotsfired=%d", ( numhits / shotsfired ), numhits, shotsfired );
         }
     }    
     if( ticktock ) ticktock = false;
@@ -155,7 +165,6 @@ public Action:OnTakeDamage( victim, &attacker, &inflictor, &Float:damage, &damag
     }
     return Plugin_Continue;
 }
-
 
 ConnectedAliveNotSpec( player ) {
     return ( IsValidClient( player ) && IsPlayerAlive( player ) && GetClientTeam( player ) > 1 );
