@@ -5,8 +5,6 @@
 #include <tf2>
 #include <tf2_stocks>
 #include <sdkhooks>
-#include <smlib>
-
 
 public Plugin:myinfo = {
 
