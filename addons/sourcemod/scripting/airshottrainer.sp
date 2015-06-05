@@ -1,12 +1,16 @@
 // Airshot trainer by athairus
 
+#pragma semicolon 1
+
 #include <sourcemod>
 #include <sdktools>
 #include <tf2>
 #include <tf2_stocks>
 #include <sdkhooks>
 
-public Plugin:myinfo = {
+#pragma newdecls required
+
+public Plugin myinfo = {
 
     name = "Airshot Trainer",
     author = "athairus",
@@ -16,31 +20,31 @@ public Plugin:myinfo = {
 
 };
 
-new g_GlowSprite;
-new g_iToolsVelocity;
-new Handle:g_hGravity;
-new bool:ticktock;
-new Float:targetLocPrev[ 32 ][ 3 ];
-new crosshairEntity[ 32 ];
-new crosshairSpriteEntity[ 32 ];
-new shotsfired = 1;
-new numhits = 0;
+int g_GlowSprite;
+int g_iToolsVelocity;
+Handle g_hGravity;
+bool ticktock;
+float targetLocPrev[32][3];
+int crosshairEntity[32];
+int crosshairSpriteEntity[32];
+int shotsfired = 1;
+int numhits = 0;
 
-public OnMapStart() {
+public void OnMapStart() {
     g_GlowSprite = PrecacheModel( "sprites/healbeam_blue.vmt" );
     //g_GlowSprite = PrecacheModel( "sprites/light_glow03.vmt" );
     Event_RoundStart( INVALID_HANDLE, "asdf", true );
 
 }
-public Event_RoundStart( Handle:hEvent, const String:szEventName[], bool:bDontBroadcast ) {
+public void Event_RoundStart( Handle hEvent, const char[] szEventName, bool bDontBroadcast ) {
     // Create prop_physics entities
-    for( new target = 0; target < 32; target++ ) {
+    for( int target = 0; target < 32; target++ ) {
 
-        new Float:foo = -16.0 + target * 8;
-        new Float:origin[ 3 ];
+        float foo = -16.0 + target * 8;
+        float origin[ 3 ];
         origin[ 0 ] = foo;
 
-        new String:crosshairName[ 64 ];
+        char crosshairName[ 64 ];
         Format( crosshairName, sizeof( crosshairName), "crosshair_%d", target );
 
         crosshairEntity[ target ] = CreateEntityByName( "prop_physics" );
@@ -53,12 +57,12 @@ public Event_RoundStart( Handle:hEvent, const String:szEventName[], bool:bDontBr
 
     
     // Create env_sprite entities
-    for( new target = 0; target < 32; target++ ) {
+    for( int target = 0; target < 32; target++ ) {
 
-        new String:crosshairName[ 64 ];
+        char crosshairName[ 64 ];
         Format( crosshairName, sizeof( crosshairName), "crosshair_%d", target );
 
-        decl String:spriteName[ 64 ];
+        char spriteName[ 64 ];
         Format( spriteName, sizeof( spriteName ), "sprite_%d", target );
         
         crosshairSpriteEntity[ target ] = CreateEntityByName( "env_sprite" );
@@ -80,34 +84,33 @@ public Event_RoundStart( Handle:hEvent, const String:szEventName[], bool:bDontBr
     }
 }
 
-public OnClientPutInServer( client ) {
+public void OnClientPutInServer( int client ) {
     SDKHook( client, SDKHook_OnTakeDamage, OnTakeDamage );
     //SDKHook( client, SDKHook_OnPlayerRunCmd, OnPlayerRunCmd );
 }
  
-public OnGameFrame() {
-    for( new player = 1; player <= MaxClients; player++ ) {     
+public void OnGameFrame() {
+    for( int player = 1; player <= MaxClients; player++ ) {     
         if( ConnectedAliveNotSpec( player ) && !( IsFakeClient( player ) ) ) {      
 
             // iterate through possible targets (including bots)
-            for( new target = 1; target <= MaxClients; target++ ) {
+            for( int target = 1; target <= MaxClients; target++ ) {
                 if( ConnectedAliveNotSpec( target ) && ( player != target ) ) {     
                     
                     // calculate airshot location, send to player
-                    new Float:crosshairLoc[ 3 ];
+                    float crosshairLoc[ 3 ];
                     PredictTarget( player, target, crosshairLoc, 5 );
                     // TE_SetupGlowSprite( crosshairLoc, g_GlowSprite, 0.1, 0.4, 255 );
                     // TE_SendToClient( player );                 
 
-                    new Float:targetLoc[ 3 ];
-                    new Float:targetVel[ 3 ];
+                    float targetLoc[ 3 ], targetVel[ 3 ];
 
                     // get target's location and velocity
                     GetClientAbsOrigin( target, targetLoc );
 
                     // some bots (like the ones on tr_walkway) don't return proper velocity data, so calculate their velocity manually 
                     GetVelocity( targetVel, targetLoc, targetLocPrev[ target ], GetTickInterval() ); 
-                    for( new x = 0; x < 3; x++ ) targetLocPrev[ target ][ x ] = targetLoc[ x ];
+                    for( int x = 0; x < 3; x++ ) targetLocPrev[ target ][ x ] = targetLoc[ x ];
                     TeleportEntity( crosshairEntity[ target ], crosshairLoc, NULL_VECTOR, targetVel );
                         
                 }
@@ -120,9 +123,9 @@ public OnGameFrame() {
     else ticktock = true;
 }
 
-public OnPluginStart() {
+public void OnPluginStart() {
     
-    new String:sGameType[ 16 ];
+    char sGameType[ 16 ];
     GetGameFolderName( sGameType, sizeof( sGameType ) );
 
     if( !StrEqual( sGameType, "tf", true ) ) 
@@ -141,8 +144,8 @@ public OnPluginStart() {
 
 }
 
-public OnPluginEnd() {
-    for( new target = 0; target < 32; target++ ) {
+public void OnPluginEnd() {
+    for( int target = 0; target < 32; target++ ) {
         AcceptEntityInput( crosshairEntity[ target ], "Deactivate" );
         AcceptEntityInput( crosshairEntity[ target ], "Kill" );
         AcceptEntityInput( crosshairSpriteEntity[ target ], "Deactivate" );
@@ -150,42 +153,42 @@ public OnPluginEnd() {
     }
 }
 
-public Action:OnPlayerRunCmd( client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon ) {
+public Action OnPlayerRunCmd( int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon ) {
     if( ( buttons & IN_ATTACK ) == IN_ATTACK ) {
         shotsfired++;
     }
     return Plugin_Continue;
 }
 
-public Action:OnTakeDamage( victim, &attacker, &inflictor, &Float:damage, &damagetype ) {
+public Action OnTakeDamage( int victim, int &attacker, int &inflictor, float &damage, int &damagetype ) {
     if( ConnectedAliveNotSpec( victim ) && ( IsFakeClient( victim ) ) ) {
         numhits++;
     }
     return Plugin_Continue;
 }
 
-ConnectedAliveNotSpec( player ) {
+bool ConnectedAliveNotSpec( int player ) {
     return ( IsValidClient( player ) && IsPlayerAlive( player ) && GetClientTeam( player ) > 1 );
 }
 
-stock bool:IsValidClient( iClient ) {
+stock bool IsValidClient( int iClient ) {
     if( iClient <= 0 ) return false;
     if( iClient > MaxClients ) return false;
     return IsClientInGame( iClient );
 }
 
-PredictTarget( player, target, Float:out[ 3 ], passes ) {
+void PredictTarget( int player, int target, float out[ 3 ], int passes ) {
 
-    new Float:playerLoc[ 3 ];
+    float playerLoc[ 3 ];
 
-    new Float:targetLoc[ 3 ];
-    new Float:targetVel[ 3 ];
+    float targetLoc[ 3 ];
+    float targetVel[ 3 ];
 
     // get current weapon's projectile velocity
-    new Float:projectileVel = GetProjectileVelocity( player );
+    float projectileVel = GetProjectileVelocity( player );
 
     // get gravity
-    new g = GetConVarInt( g_hGravity ) * -1;
+    int g = GetConVarInt( g_hGravity ) * -1;
 
     // get player's location
     GetClientAbsOrigin( player, playerLoc );
@@ -196,21 +199,19 @@ PredictTarget( player, target, Float:out[ 3 ], passes ) {
     // some bots (like the ones on tr_walkway) don't return proper velocity data, so calculate their velocity manually 
     if( IsFakeClient( target ) ) {
         GetVelocity( targetVel, targetLoc, targetLocPrev[ target ], GetTickInterval() ); 
-        for( new x = 0; x < 3; x++ ) targetLocPrev[ target ][ x ] = targetLoc[ x ];
+        for( int x = 0; x < 3; x++ ) targetLocPrev[ target ][ x ] = targetLoc[ x ];
     }
-    else for ( new x = 0; x < 3; x++ ) targetVel[ x ] = GetEntDataFloat( target, g_iToolsVelocity + ( x * 4 ) );
+    else for ( int x = 0; x < 3; x++ ) targetVel[ x ] = GetEntDataFloat( target, g_iToolsVelocity + ( x * 4 ) );
     
 
-    new Float:distance;
-    new Float:time;
-    new Float:gfactor;
+    float distance, time, gfactor;
 
-    new Float:distanceToGround = GetClientDistanceToGround( target );
-    new Float:minDistance = 20.0;
+    float distanceToGround = GetClientDistanceToGround( target );
+    float minDistance = 20.0;
 
 
     // calculate the ideal location using n passes
-    for( new i = 0; i < passes; i++ ) {
+    for( int i = 0; i < passes; i++ ) {
 
         // calculate travel time by projectile from player to target
         if( i == 0 ) distance = GetVectorDistance( playerLoc, targetLoc );
@@ -245,12 +246,12 @@ PredictTarget( player, target, Float:out[ 3 ], passes ) {
 
 }
 
-GetVelocity( Float:out[ 3 ], Float:current[ 3 ], Float:previous[ 3 ], Float:delta ) {
-    for( new x = 0; x < 3; x++ ) out[ x ] = ( current[ x ] - previous[ x ] ) / delta;
+void GetVelocity( float out[ 3 ], float current[ 3 ], float previous[ 3 ], float delta ) {
+    for( int x = 0; x < 3; x++ ) out[ x ] = ( current[ x ] - previous[ x ] ) / delta;
 }
 
-Float:GetWarmup( player ) {
-    new weapon = GetEntPropEnt( player, Prop_Send, "m_hActiveWeapon" );
+float GetWarmup( int player ) {
+    int weapon = GetEntPropEnt( player, Prop_Send, "m_hActiveWeapon" );
 
     switch( GetEntProp( weapon, Prop_Send, "m_iItemDefinitionIndex" ) ) {
 
@@ -268,10 +269,10 @@ Float:GetWarmup( player ) {
 }
 
 
-Float:GetProjectileVelocity( player ) {
-    new Float:pv = 0.0; // if not changed, current weapon is a hitscan/melee weapon
+float GetProjectileVelocity( int player ) {
+    float pv = 0.0; // if not changed, current weapon is a hitscan/melee weapon
 
-    new weapon = GetEntPropEnt( player, Prop_Send, "m_hActiveWeapon" );
+    int weapon = GetEntPropEnt( player, Prop_Send, "m_hActiveWeapon" );
 
 
     // http://wiki.teamfortress.com/wiki/Projectiles
@@ -357,9 +358,9 @@ Float:GetProjectileVelocity( player ) {
         case 207: // stickybomb launcher (renamed/strange)
             pv = 2410.0;
         case 130: // scottish resistance
-            pv = 2410.0
+            pv = 2410.0;
         case 265: // sticky jumper
-            pv = 2410.0
+            pv = 2410.0;
 
         case 17: // syringe gun
             pv = 1000.0;
@@ -379,18 +380,18 @@ Float:GetProjectileVelocity( player ) {
 }
 
 
-stock Float:GetClientDistanceToGround( client ) {
+stock float GetClientDistanceToGround( int client ) {
 
     // Player is already standing on the ground?
     if( GetEntPropEnt( client, Prop_Send, "m_hGroundEntity" ) == 0 )
         return 0.0;
     
-    new Float:fOrigin[ 3 ], Float:fGround[ 3 ];
+    float fOrigin[ 3 ], fGround[ 3 ];
     GetClientAbsOrigin( client, fOrigin );
     
     fOrigin[ 2 ] += 10.0;
     
-    TR_TraceRayFilter( fOrigin, Float:{ 90.0, 0.0, 0.0 }, MASK_PLAYERSOLID, RayType_Infinite, TraceRayNoPlayers, client );
+    TR_TraceRayFilter( fOrigin, view_as<float>( { 90.0, 0.0, 0.0 } ), MASK_PLAYERSOLID, RayType_Infinite, TraceRayNoPlayers, client );
     if ( TR_DidHit() ) {
         TR_GetEndPosition( fGround );
         fOrigin[ 2 ] -= 10.0;
@@ -399,7 +400,7 @@ stock Float:GetClientDistanceToGround( client ) {
     return 0.0;
 }
 
-public bool:TraceRayNoPlayers( entity, mask, any:data ) {
+public bool TraceRayNoPlayers( int entity, int mask, any data ) {
 
     if( entity == data || ( entity >= 1 && entity <= MaxClients ) ) {
         return false;
@@ -407,11 +408,11 @@ public bool:TraceRayNoPlayers( entity, mask, any:data ) {
     return true;
 }  
 
-public bool:Eyetest_TraceFilter(entity, mask) {
+public bool Eyetest_TraceFilter( int entity, int mask ) {
     return entity > MaxClients;
 }
 
-public bool:allowAll( entity, mask ) {
+public bool allowAll( int entity, int mask ) {
     return true;
 }
 
